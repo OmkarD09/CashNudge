@@ -7,7 +7,7 @@ import { ProviderBadge } from "@/components/ProviderBadge";
 import { InvoiceTable } from "@/components/InvoiceTable";
 import { FollowupComposerDrawer } from "@/components/FollowupComposerDrawer";
 import { CsvUploadZone } from "@/components/CsvUploadZone";
-import { LedgerCashFlowSummary, InvoicePrediction } from "@/types";
+import { LedgerCashFlowSummary, InvoicePrediction, LedgerAnalysisResult } from "@/types";
 import * as api from "@/lib/api";
 
 const mockSummary: LedgerCashFlowSummary = {
@@ -218,6 +218,378 @@ describe("FollowupComposerDrawer", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("parses subject and message body from Gemma draft without duplication", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "gentle" as const,
+      drafted_message: "Subject: Friendly check-in: Invoice #INV-2025-019\n\nDear Apex Team,\nChecking in on invoice #INV-2025-019.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+      />
+    );
+
+    const generateBtn = screen.getByRole("button", { name: /Generate Payment Draft/i });
+    fireEvent.click(generateBtn);
+
+    await waitFor(() => {
+      const subjectInput = screen.getByLabelText(/Subject Line/i) as HTMLInputElement;
+      const bodyTextarea = screen.getByLabelText(/Message Body/i) as HTMLTextAreaElement;
+
+      expect(subjectInput.value).toBe("Friendly check-in: Invoice #INV-2025-019");
+      expect(bodyTextarea.value).toBe("Dear Apex Team,\nChecking in on invoice #INV-2025-019.");
+      // Ensure subject is not duplicated in body
+      expect(bodyTextarea.value.startsWith("Subject:")).toBe(false);
+    });
+  });
+
+  it("validates recipient email and rejects missing or malformed email", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "gentle" as const,
+      drafted_message: "Subject: Payment Reminder\n\nPlease find attached invoice.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+    const mockOpenEmail = vi.fn();
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+        onOpenEmailApp={mockOpenEmail}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Payment Draft/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open in Email App/i })).toBeInTheDocument();
+    });
+
+    const openEmailBtn = screen.getByRole("button", { name: /Open in Email App/i });
+
+    // 1. Missing recipient error
+    fireEvent.click(openEmailBtn);
+    expect(screen.getByText(/Recipient email address is required/i)).toBeInTheDocument();
+    expect(mockOpenEmail).not.toHaveBeenCalled();
+
+    // 2. Malformed email error
+    const emailInput = screen.getByLabelText(/Recipient Email/i);
+    fireEvent.change(emailInput, { target: { value: "not-a-valid-email" } });
+    fireEvent.click(openEmailBtn);
+
+    expect(screen.getByText(/Please enter a valid email address/i)).toBeInTheDocument();
+    expect(mockOpenEmail).not.toHaveBeenCalled();
+  });
+
+  it("opens Gmail Compose in a new tab with current edited recipient, subject, and body on explicit click", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "firm" as const,
+      drafted_message: "Subject: Payment Reminder: Invoice #INV-2025-019\n\nDear Apex Team,\nPlease review invoice #INV-2025-019 for $3,200.00.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+    const mockOpenGmail = vi.fn();
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+        onOpenGmail={mockOpenGmail}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Payment Draft/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open in Gmail/i })).toBeInTheDocument();
+    });
+
+    // Enter recipient
+    fireEvent.change(screen.getByLabelText(/Recipient Email/i), {
+      target: { value: "accounting@apexretailers.com" },
+    });
+
+    // Edit subject
+    fireEvent.change(screen.getByLabelText(/Subject Line/i), {
+      target: { value: "Urgent: Payment for Invoice #INV-2025-019 ($3,200.00 & Late Fee)" },
+    });
+
+    // Edit body with special characters, punctuation, and multiline paragraphs
+    fireEvent.change(screen.getByLabelText(/Message Body/i), {
+      target: {
+        value: "Hello Finance Team,\n\nParagraph 1: Please remit $3,200.00 & 5% interest.\n\nParagraph 2: Wire transfer instructions attached.\n\nBest,\nOmkar",
+      },
+    });
+
+    // Verify Gmail does NOT open before explicit button click
+    expect(mockOpenGmail).not.toHaveBeenCalled();
+
+    // Explicit user click
+    fireEvent.click(screen.getByRole("button", { name: /Open in Gmail/i }));
+
+    expect(mockOpenGmail).toHaveBeenCalledTimes(1);
+    const gmailUrl = mockOpenGmail.mock.calls[0][0];
+
+    // Verify Gmail URL structure
+    expect(gmailUrl.startsWith("https://mail.google.com/mail/?view=cm&fs=1")).toBe(true);
+
+    const parsed = new URL(gmailUrl);
+    expect(parsed.searchParams.get("view")).toBe("cm");
+    expect(parsed.searchParams.get("fs")).toBe("1");
+    expect(parsed.searchParams.get("to")).toBe("accounting@apexretailers.com");
+    expect(parsed.searchParams.get("su")).toBe(
+      "Urgent: Payment for Invoice #INV-2025-019 ($3,200.00 & Late Fee)"
+    );
+    expect(parsed.searchParams.get("body")).toBe(
+      "Hello Finance Team,\n\nParagraph 1: Please remit $3,200.00 & 5% interest.\n\nParagraph 2: Wire transfer instructions attached.\n\nBest,\nOmkar"
+    );
+
+    // Human approval confirmation banner is displayed
+    expect(screen.getByText(/Gmail opened in a new tab with your prefilled draft/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Approval Required: CashNudge transfers this draft to your email client/i)
+    ).toBeInTheDocument();
+  });
+
+  it("validates fields before opening Gmail and rejects empty subject or body", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "gentle" as const,
+      drafted_message: "Subject: Follow-up\n\nHi Apex Team.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+    const mockOpenGmail = vi.fn();
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+        onOpenGmail={mockOpenGmail}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Payment Draft/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open in Gmail/i })).toBeInTheDocument();
+    });
+
+    const openGmailBtn = screen.getByRole("button", { name: /Open in Gmail/i });
+
+    // 1. Missing recipient error
+    fireEvent.click(openGmailBtn);
+    expect(screen.getByText(/Recipient email address is required/i)).toBeInTheDocument();
+    expect(mockOpenGmail).not.toHaveBeenCalled();
+
+    // Fill valid recipient
+    fireEvent.change(screen.getByLabelText(/Recipient Email/i), {
+      target: { value: "client@example.com" },
+    });
+
+    // 2. Clear subject to trigger subject error
+    fireEvent.change(screen.getByLabelText(/Subject Line/i), {
+      target: { value: "   " },
+    });
+    fireEvent.click(openGmailBtn);
+    expect(screen.getByText(/Email subject is required/i)).toBeInTheDocument();
+    expect(mockOpenGmail).not.toHaveBeenCalled();
+
+    // Restore subject and clear message body to trigger message error
+    fireEvent.change(screen.getByLabelText(/Subject Line/i), {
+      target: { value: "Valid Subject" },
+    });
+    fireEvent.change(screen.getByLabelText(/Message Body/i), {
+      target: { value: "   " },
+    });
+    fireEvent.click(openGmailBtn);
+    expect(screen.getByText(/Message body is required/i)).toBeInTheDocument();
+    expect(mockOpenGmail).not.toHaveBeenCalled();
+  });
+
+  it("handles popup-blocking behavior gracefully and provides a direct fallback link and retry", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "gentle" as const,
+      drafted_message: "Subject: Check-in\n\nHi Apex team, checking in.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+
+    // Mock window.open to simulate popup blocker returning null
+    const windowOpenSpy = vi.spyOn(window, "open").mockReturnValue(null);
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Payment Draft/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open in Gmail/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Recipient Email/i), {
+      target: { value: "billing@apex.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Open in Gmail/i }));
+
+    expect(windowOpenSpy).toHaveBeenCalledTimes(1);
+
+    // Fallback banner for blocked popup is displayed
+    expect(screen.getByText(/Popup Blocked by Browser/i)).toBeInTheDocument();
+    const fallbackLink = screen.getByRole("link", { name: /Open Gmail Directly/i });
+    expect(fallbackLink).toBeInTheDocument();
+    expect(fallbackLink).toHaveAttribute("target", "_blank");
+    expect(fallbackLink).toHaveAttribute("rel", "noopener noreferrer");
+    expect(fallbackLink.getAttribute("href")).toContain("https://mail.google.com/mail/?view=cm&fs=1");
+
+    // Retry button is available
+    const retryBtn = screen.getByRole("button", { name: /Retry/i });
+    expect(retryBtn).toBeInTheDocument();
+
+    windowOpenSpy.mockRestore();
+  });
+
+  it("constructs safely URL-encoded mailto URL with user-edited content on explicit click", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "firm" as const,
+      drafted_message: "Subject: Outstanding Balance: Invoice #INV-2025-019\n\nDear Apex,\nInvoice is overdue by 5 days for $3,200.00 & terms Net 60.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+    const mockOpenEmail = vi.fn();
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+        onOpenEmailApp={mockOpenEmail}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Payment Draft/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Recipient Email/i)).toBeInTheDocument();
+    });
+
+    // Enter recipient
+    fireEvent.change(screen.getByLabelText(/Recipient Email/i), {
+      target: { value: "billing@apexretailers.com" },
+    });
+
+    // Edit subject
+    fireEvent.change(screen.getByLabelText(/Subject Line/i), {
+      target: { value: "Urgent: Payment for Invoice #INV-2025-019 ($3,200.00)" },
+    });
+
+    // Edit body with multiline text and special characters
+    fireEvent.change(screen.getByLabelText(/Message Body/i), {
+      target: { value: "Hi Apex,\n\nPlease process $3,200.00 & confirm date.\n\nBest,\nMe" },
+    });
+
+    // Verify it has NOT opened before click
+    expect(mockOpenEmail).not.toHaveBeenCalled();
+
+    // Explicit click
+    fireEvent.click(screen.getByRole("button", { name: /Open in Email App/i }));
+
+    expect(mockOpenEmail).toHaveBeenCalledTimes(1);
+    const mailtoUrl = mockOpenEmail.mock.calls[0][0];
+
+    expect(mailtoUrl.startsWith("mailto:billing@apexretailers.com?subject=")).toBe(true);
+    expect(mailtoUrl).toContain("Urgent%3A%20Payment%20for%20Invoice%20%23INV-2025-019%20(%243%2C200.00)");
+    expect(mailtoUrl).toContain("&body=Hi%20Apex%2C%0A%0APlease%20process%20%243%2C200.00%20%26%20confirm%20date.%0A%0ABest%2C%0AMe");
+
+    // Feedback notice displayed
+    expect(screen.getByText(/Email app opened with your draft/i)).toBeInTheDocument();
+    expect(screen.getByText(/Approval Required: CashNudge transfers this draft to your email client/i)).toBeInTheDocument();
+  });
+
+  it("copies full email draft including To, Subject, and Body for fallback webmail support", async () => {
+    const mockDraftResponse = {
+      invoice_id: "INV-2025-019",
+      customer_name: "Apex Retailers",
+      tone: "gentle" as const,
+      drafted_message: "Subject: Follow-up on INV-2025-019\n\nHi Apex, just following up.",
+      inference_provider: "Gemma Hosted",
+      warnings: [],
+      human_approval_required: true,
+    };
+
+    vi.spyOn(api, "draftFollowup").mockResolvedValueOnce(mockDraftResponse);
+
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    render(
+      <FollowupComposerDrawer
+        invoice={mockPredictions[0]}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Payment Draft/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Copy Full Draft/i })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Recipient Email/i), {
+      target: { value: "accounts@apex.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Copy Full Draft/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "To: accounts@apex.com\nSubject: Follow-up on INV-2025-019\n\nHi Apex, just following up."
+      );
+      expect(screen.getByText("Copied Full Draft!")).toBeInTheDocument();
+    });
+  });
 });
 
 describe("CsvUploadZone", () => {
@@ -276,7 +648,7 @@ describe("CsvUploadZone", () => {
       metadata: { model_provider: "Prior Labs Hosted TabPFN API" },
     };
 
-    vi.spyOn(api, "analyzeLedgerCsv").mockResolvedValueOnce(mockAnalysisResult as any);
+    vi.spyOn(api, "analyzeLedgerCsv").mockResolvedValueOnce(mockAnalysisResult as LedgerAnalysisResult);
 
     render(
       <CsvUploadZone

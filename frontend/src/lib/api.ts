@@ -43,25 +43,35 @@ export class ApiClientError extends Error {
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    let errorData: any;
+    let errorData: Record<string, unknown> | undefined;
     try {
-      errorData = await res.json();
+      errorData = (await res.json()) as Record<string, unknown>;
     } catch {
       errorData = { message: await res.text() };
     }
 
-    const message =
-      typeof errorData?.detail === "string"
-        ? errorData.detail
-        : errorData?.detail?.message ||
-          errorData?.message ||
-          `Request failed with status ${res.status}`;
+    const detail = errorData?.detail;
+    let message: string = `Request failed with status ${res.status}`;
 
-    throw new ApiClientError(
-      message,
-      res.status,
-      typeof errorData?.detail === "object" ? errorData.detail : errorData
-    );
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (
+      typeof detail === "object" &&
+      detail !== null &&
+      "message" in detail &&
+      typeof (detail as { message: unknown }).message === "string"
+    ) {
+      message = (detail as { message: string }).message;
+    } else if (typeof errorData?.message === "string") {
+      message = errorData.message;
+    }
+
+    const payloadData =
+      typeof detail === "object" && detail !== null
+        ? (detail as Record<string, unknown>)
+        : errorData;
+
+    throw new ApiClientError(message, res.status, payloadData);
   }
   return res.json();
 }

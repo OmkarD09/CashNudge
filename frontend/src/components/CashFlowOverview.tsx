@@ -1,7 +1,7 @@
 import React from "react";
 import { LedgerCashFlowSummary } from "@/types";
 import { formatCurrency, formatPercent } from "@/lib/api";
-import { ShieldCheckIcon, AlertTriangleIcon, ShieldAlertIcon, InfoIcon } from "./icons";
+import { ShieldCheckIcon, AlertTriangleIcon, ShieldAlertIcon } from "./icons";
 
 interface CashFlowOverviewProps {
   summary: LedgerCashFlowSummary;

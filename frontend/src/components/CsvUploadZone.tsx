@@ -6,7 +6,6 @@ import {
   FileTextIcon,
   XIcon,
   AlertTriangleIcon,
-  CheckIcon,
   InfoIcon,
 } from "./icons";
 
@@ -84,7 +83,7 @@ export function CsvUploadZone({ isOpen, onClose, onSuccess }: CsvUploadZoneProps
       setIsUploading(false);
       if (err instanceof ApiClientError) {
         setErrorMessage(err.message || "Failed to analyze ledger CSV.");
-        const errorData = err.data as any;
+        const errorData = err.data as { errors?: ValidationErrorDetail[] } | undefined;
         if (errorData?.errors && Array.isArray(errorData.errors)) {
           setValidationErrors(errorData.errors);
         }

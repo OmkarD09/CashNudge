@@ -1,5 +1,5 @@
 import React from "react";
-import { RefreshCwIcon, UploadCloudIcon, ShieldAlertIcon } from "./icons";
+import { RefreshCwIcon, UploadCloudIcon } from "./icons";
 
 interface NavbarProps {
   isApiHealthy: boolean | null;

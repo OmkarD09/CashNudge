@@ -10,11 +10,6 @@ export function ProviderBadge({
   provider = "Prior Labs Hosted TabPFN API",
   isSynthetic = true,
 }: ProviderBadgeProps) {
-  const isTabPFNHosted =
-    provider.toLowerCase().includes("priorlabs") ||
-    provider.toLowerCase().includes("tabpfn") ||
-    provider.toLowerCase().includes("cloud");
-
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-[#555555]">
       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#F7F6F3] border border-[#EAEAEA] font-mono-numbers">

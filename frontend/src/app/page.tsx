@@ -61,9 +61,53 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    verifyHealth();
-    loadSampleLedger();
-  }, [verifyHealth, loadSampleLedger]);
+    let ignore = false;
+
+    async function initialize() {
+      try {
+        await checkHealth();
+        if (!ignore) {
+          setIsApiHealthy(true);
+          setConnectionError(null);
+        }
+      } catch {
+        if (!ignore) {
+          setIsApiHealthy(false);
+          setConnectionError(
+            "Could not establish connection to CashNudge API (http://127.0.0.1:8000). Please verify the backend service is running."
+          );
+        }
+      }
+
+      try {
+        const result = await getSampleLedger();
+        if (!ignore) {
+          setData(result);
+          setIsCustomLedger(false);
+          setIsApiHealthy(true);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          if (err instanceof ApiClientError) {
+            setConnectionError(err.message);
+          } else {
+            setConnectionError("Failed to fetch initial ledger data from backend.");
+          }
+          setIsApiHealthy(false);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    initialize();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleCustomUploadSuccess = (result: LedgerAnalysisResult) => {
     setData(result);
