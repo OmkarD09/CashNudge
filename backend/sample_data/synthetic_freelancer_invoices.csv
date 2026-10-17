@@ -1,0 +1,25 @@
+invoice_id,client_name,project_category,client_tier,invoice_amount,payment_terms_days,revision_count,past_late_count,status,actual_days_to_pay
+INV-2024-001,Apex Digital Labs,Full-Stack Web App,Mid-Market,6500.00,30,1,0,paid_on_time,28
+INV-2024-002,Beacon Studio Co,Brand Identity & Design,Solo-Founder,1800.00,14,0,0,paid_on_time,12
+INV-2024-003,Cascade Logistics,Cloud & DevOps Architecture,Enterprise,12500.00,60,2,2,paid_late,82
+INV-2024-004,Driftwood Health,Mobile App Development,Seed-Startup,8200.00,30,3,1,paid_late,51
+INV-2024-005,Evergreen Media,SEO & Content Strategy,Mid-Market,3200.00,30,0,0,paid_on_time,25
+INV-2024-006,Flux Automations,Cloud & DevOps Architecture,Seed-Startup,7400.00,30,1,1,paid_late,44
+INV-2024-007,Glacier Retailers,Full-Stack Web App,Enterprise,16000.00,45,2,0,paid_on_time,40
+INV-2024-008,Horizon Creative,UI/UX Product Audit,Solo-Founder,2400.00,14,1,0,paid_on_time,14
+INV-2024-009,Ironclad Security,Full-Stack Web App,Enterprise,14500.00,60,4,3,paid_late,95
+INV-2024-010,Juniper Apparel,Brand Identity & Design,Mid-Market,4100.00,30,0,0,paid_on_time,27
+INV-2024-011,Kestrel Analytics,Mobile App Development,Seed-Startup,9800.00,30,2,2,paid_late,63
+INV-2024-012,Luminary Publishing,SEO & Content Strategy,Solo-Founder,1500.00,14,0,0,paid_on_time,10
+INV-2024-013,Meridian Dynamics,Cloud & DevOps Architecture,Enterprise,11000.00,45,1,1,paid_on_time,42
+INV-2024-014,Nexus Biometrics,Full-Stack Web App,Seed-Startup,8900.00,30,3,2,paid_late,58
+INV-2024-015,Orion Robotics,Mobile App Development,Enterprise,17500.00,60,2,1,paid_late,77
+INV-2024-016,Pinnacle Ventures,UI/UX Product Audit,Mid-Market,3800.00,30,0,0,paid_on_time,22
+INV-2024-017,Quasar Clean Energy,Full-Stack Web App,Enterprise,13200.00,45,1,0,paid_on_time,41
+INV-2024-018,Redwood Crafts,Brand Identity & Design,Solo-Founder,950.00,14,0,0,paid_on_time,11
+INV-2024-019,Silverline Fintech,Full-Stack Web App,Enterprise,15500.00,60,3,2,open,
+INV-2024-020,Terraform Spatial,Cloud & DevOps Architecture,Mid-Market,6800.00,30,1,0,open,
+INV-2024-021,Umbra Games,Mobile App Development,Seed-Startup,9200.00,30,4,3,open,
+INV-2024-022,Vanguard PR,SEO & Content Strategy,Solo-Founder,2100.00,14,0,0,open,
+INV-2024-023,Wavelength Audio,Brand Identity & Design,Mid-Market,4500.00,30,1,1,open,
+INV-2024-024,Zephyr Biotech,UI/UX Product Audit,Seed-Startup,3900.00,30,2,0,open,

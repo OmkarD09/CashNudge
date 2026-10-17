@@ -1,0 +1,53 @@
+# Render Blueprint Specification for CashNudge
+# Best Use of Render: Hybrid Architecture (Render Static Site + Render Web Service)
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. FastAPI Python AI Backend (Render Web Service — Starter Plan)
+  # Acts as the AI Application Runtime: orchestrates TabPFN risk estimation
+  # and Gemma payment follow-up drafting with safe telemetry and rate limiting.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: cashnudge-backend
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: TABPFN_TOKEN
+        sync: false # Set securely in Render dashboard (Prior Labs API Key)
+      - key: GEMMA_PROVIDER
+        value: hosted
+      - key: GEMMA_HOSTED_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: GEMMA_HOSTED_API_KEY
+        sync: false # Set securely in Render dashboard (OpenRouter API Key)
+      - key: GEMMA_HOSTED_MODEL
+        value: google/gemma-4-26b-a4b-it
+      - key: CORS_ALLOWED_ORIGINS
+        # Include localhost for dev + append deployed frontend origin: e.g. http://localhost:3000,https://cashnudge-frontend.onrender.com
+        value: http://localhost:3000,http://127.0.0.1:3000
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_LEDGER_PER_MINUTE
+        value: "60"
+      - key: RATE_LIMIT_FOLLOWUP_PER_MINUTE
+        value: "20"
+
+  # ---------------------------------------------------------------------------
+  # 2. Next.js Static Dashboard (Render Static Site — Free Tier)
+  # High-performance static export deployed to Render's global CDN edge.
+  # Communicates client-side with the FastAPI backend service.
+  # ---------------------------------------------------------------------------
+  - type: static
+    name: cashnudge-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: out
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        # Set to the live URL of cashnudge-backend (e.g. https://cashnudge-backend.onrender.com)
+        sync: false

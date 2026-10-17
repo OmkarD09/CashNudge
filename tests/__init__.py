@@ -1,0 +1,1 @@
+"""CashNudge test suite."""
