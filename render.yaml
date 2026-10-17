@@ -42,8 +42,9 @@ services:
   # High-performance static export deployed to Render's global CDN edge.
   # Communicates client-side with the FastAPI backend service.
   # ---------------------------------------------------------------------------
-  - type: static
+  - type: web
     name: cashnudge-frontend
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: out
