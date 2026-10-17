@@ -4,7 +4,7 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # 1. FastAPI Python AI Backend (Render Web Service — Starter Plan)
+  # 1. FastAPI Python AI Backend (Render Web Service — Free Tier)
   # Acts as the AI Application Runtime: orchestrates TabPFN risk estimation
   # and Gemma payment follow-up drafting with safe telemetry and rate limiting.
   # ---------------------------------------------------------------------------
