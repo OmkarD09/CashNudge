@@ -9,6 +9,7 @@ from backend.schemas import (
     InvoiceStatus,
     RiskTier,
     InvoicePrediction,
+    HistoricalInvoiceRecord,
     LedgerCashFlowSummary,
     LedgerAnalysisResult,
 )
@@ -234,8 +235,23 @@ def analyze_ledger(
         "feature_schema": get_feature_metadata(),
     }
 
+    historical_records: List[HistoricalInvoiceRecord] = [
+        HistoricalInvoiceRecord(
+            invoice_id=str(row["invoice_id"]),
+            client_name=str(row["client_name"]),
+            invoice_amount=float(row["invoice_amount"]),
+            payment_terms_days=int(row["payment_terms_days"]),
+            status=InvoiceStatus(str(row["status"]).strip().lower()),
+            actual_days_to_pay=float(row["actual_days_to_pay"]) if pd.notna(row["actual_days_to_pay"]) else None,
+            project_category=str(row.get("project_category", "")) or None,
+            client_tier=str(row.get("client_tier", "")) or None,
+        )
+        for _, row in df_hist.iterrows()
+    ]
+
     return LedgerAnalysisResult(
         summary=summary,
         predictions=predictions,
+        historical_invoices=historical_records,
         metadata=metadata,
     )

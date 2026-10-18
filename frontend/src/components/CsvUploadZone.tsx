@@ -7,6 +7,7 @@ import {
   XIcon,
   AlertTriangleIcon,
   InfoIcon,
+  DownloadIcon,
 } from "./icons";
 
 interface CsvUploadZoneProps {
@@ -102,6 +103,36 @@ export function CsvUploadZone({ isOpen, onClose, onSuccess }: CsvUploadZoneProps
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const csvContent = [
+      "invoice_id,client_name,invoice_amount,payment_terms_days,project_category,client_tier,is_paid_late,actual_days_to_pay",
+      "INV-2024-001,Acme Corp,4500.00,30,Web Development,Enterprise,0,28",
+      "INV-2024-002,Apex Retailers,6200.00,30,UI/UX Design,Standard Client,1,45",
+      "INV-2024-003,BrightPath Studio,2800.00,15,Brand Identity,Small Business,0,14",
+      "INV-2024-004,CloudScale Inc,7500.00,45,Backend Engineering,Enterprise,0,40",
+      "INV-2024-005,DataSphere LLC,3400.00,30,Data Analysis,Standard Client,1,52",
+      "INV-2024-006,EcoVentures,1900.00,15,Consulting,Small Business,0,12",
+      "INV-2024-007,Apex Retailers,5100.00,30,UI/UX Design,Standard Client,1,48",
+      "INV-2024-008,Horizon Media,4200.00,30,Marketing Creative,Standard Client,0,29",
+      "INV-2024-009,InnoTech Solutions,8800.00,60,Full Stack Dev,Enterprise,0,55",
+      "INV-2024-010,Vanguard Tech,3100.00,30,SEO Strategy,Small Business,1,42",
+      "INV-2025-011,Acme Corp,5200.00,30,Web Development,Enterprise,,",
+      "INV-2025-012,Apex Retailers,6800.00,30,UI/UX Design,Standard Client,,",
+      "INV-2025-013,BrightPath Studio,3100.00,15,Brand Identity,Small Business,,",
+      "INV-2025-014,CloudScale Inc,8400.00,45,Backend Engineering,Enterprise,,",
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "cashnudge_sample_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
       <div
@@ -188,18 +219,33 @@ export function CsvUploadZone({ isOpen, onClose, onSuccess }: CsvUploadZoneProps
             </div>
           )}
 
-          {/* Schema Requirements Hint */}
-          <div className="p-3 rounded-md bg-[#F7F6F3] border border-[#EAEAEA] text-[11px] text-[#555555] space-y-1.5">
-            <div className="flex items-center gap-1.5 font-medium text-[#111111]">
-              <InfoIcon size={13} />
-              <span>Required CSV columns:</span>
+          {/* Schema Requirements Hint & Sample Download */}
+          <div className="p-3.5 rounded-lg bg-[#F7F6F3] border border-[#EAEAEA] text-[11px] text-[#555555] space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-medium text-[#111111]">
+                <InfoIcon size={13} />
+                <span>CSV Column Format</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-[#111111] hover:underline cursor-pointer"
+              >
+                <DownloadIcon size={12} />
+                <span>Download Template (.csv)</span>
+              </button>
             </div>
             <code className="block p-1.5 bg-[#FFFFFF] rounded border border-[#EAEAEA] font-mono text-[10px] text-[#111111] overflow-x-auto">
               invoice_id, client_name, invoice_amount, payment_terms_days, is_paid_late
             </code>
-            <p className="text-[10px] text-[#787774]">
-              Leave <code>is_paid_late</code> blank for open invoices to receive TabPFN late-payment risk estimation.
-            </p>
+            <div className="text-[10px] text-[#787774] space-y-1">
+              <p>
+                • <strong>Historical invoices:</strong> Set <code>is_paid_late</code> to <code>0</code> (on-time) or <code>1</code> (late). (Requires ≥ 5 settled rows to train TabPFN).
+              </p>
+              <p>
+                • <strong>Open invoices:</strong> Leave <code>is_paid_late</code> blank to estimate late-payment risk.
+              </p>
+            </div>
           </div>
 
           {/* Error Message Display */}

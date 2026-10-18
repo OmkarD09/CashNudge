@@ -216,7 +216,9 @@ async def analyze_uploaded_ledger(
     try:
         is_synthetic = "synthetic" in filename.lower()
         result = analyze_ledger(df, is_synthetic=is_synthetic, reference_date=reference_date)
-        return result
+        updated_metadata = dict(result.metadata)
+        updated_metadata["file_name"] = filename
+        return result.model_copy(update={"metadata": updated_metadata})
     except (InsufficientHistoricalDataError, InsufficientClassDiversityError) as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

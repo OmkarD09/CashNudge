@@ -63,12 +63,27 @@ class LedgerCashFlowSummary(BaseModel):
     low_risk_amount: float
 
 
+class HistoricalInvoiceRecord(BaseModel):
+    """Historical settled invoice record from client ledger."""
+    model_config = ConfigDict(frozen=True)
+
+    invoice_id: str
+    client_name: str
+    invoice_amount: float
+    payment_terms_days: int
+    status: InvoiceStatus
+    actual_days_to_pay: Optional[float] = None
+    project_category: Optional[str] = None
+    client_tier: Optional[str] = None
+
+
 class LedgerAnalysisResult(BaseModel):
     """Complete output payload for analyze_ledger."""
     model_config = ConfigDict(frozen=True)
 
     summary: LedgerCashFlowSummary
     predictions: List[InvoicePrediction]
+    historical_invoices: List[HistoricalInvoiceRecord] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

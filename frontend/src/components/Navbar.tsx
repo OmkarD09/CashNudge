@@ -1,5 +1,5 @@
 import React from "react";
-import { RefreshCwIcon, UploadCloudIcon } from "./icons";
+import { RefreshCwIcon, UploadCloudIcon, HardDriveIcon } from "./icons";
 
 interface NavbarProps {
   isApiHealthy: boolean | null;
@@ -8,6 +8,8 @@ interface NavbarProps {
   onOpenUpload: () => void;
   onResetBenchmark: () => void;
   isCustomLedger: boolean;
+  onOpenStorageModal?: () => void;
+  hasSavedLedger?: boolean;
 }
 
 export function Navbar({
@@ -17,6 +19,8 @@ export function Navbar({
   onOpenUpload,
   onResetBenchmark,
   isCustomLedger,
+  onOpenStorageModal,
+  hasSavedLedger = false,
 }: NavbarProps) {
   return (
     <header className="sticky top-0 z-30 w-full border-b border-[#EAEAEA] bg-[#FBFBFA]/90 backdrop-blur-md">
@@ -81,6 +85,26 @@ export function Navbar({
               </button>
             )}
           </div>
+
+          {/* Local Storage & Privacy Button */}
+          {onOpenStorageModal && (
+            <button
+              onClick={onOpenStorageModal}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border border-[#EAEAEA] bg-[#FFFFFF] text-[#555555] hover:text-[#111111] hover:bg-[#F7F6F3] transition-colors cursor-pointer"
+              title="Browser Storage & Privacy Settings (100% Client-Side)"
+              aria-label="Browser Storage and Privacy Settings"
+            >
+              <HardDriveIcon size={12} className={hasSavedLedger ? "text-[#346538]" : "text-[#787774]"} />
+              <span className="text-[11px] font-mono hidden md:inline">
+                {hasSavedLedger ? "Storage: Saved" : "Browser Storage"}
+              </span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  hasSavedLedger ? "bg-[#346538]" : "bg-[#A3A3A0]"
+                }`}
+              />
+            </button>
+          )}
 
           {/* Ledger mode switch button if custom ledger loaded */}
           {isCustomLedger && (

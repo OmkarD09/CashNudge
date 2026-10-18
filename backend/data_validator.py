@@ -340,6 +340,131 @@ def validate_invoice_dataframe(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[Val
     return df_clean, errors
 
 
+def normalize_and_impute_csv_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize column headers and auto-impute optional columns for broad CSV compatibility."""
+    if df is None or df.empty:
+        return df
+
+    df_norm = df.copy()
+
+    # 1. Normalize column names (strip whitespace and lower-case)
+    col_map = {col: str(col).strip().lower().replace(" ", "_") for col in df_norm.columns}
+    df_norm.rename(columns=col_map, inplace=True)
+
+    # 2. Map standard aliases
+    alias_map = {
+        "id": "invoice_id",
+        "invoice_number": "invoice_id",
+        "invoice_no": "invoice_id",
+        "inv_id": "invoice_id",
+        "client": "client_name",
+        "customer": "client_name",
+        "customer_name": "client_name",
+        "amount": "invoice_amount",
+        "total": "invoice_amount",
+        "balance": "invoice_amount",
+        "terms": "payment_terms_days",
+        "payment_terms": "payment_terms_days",
+        "net_terms": "payment_terms_days",
+        "category": "project_category",
+        "tier": "client_tier",
+        "revisions": "revision_count",
+    }
+    for old_name, new_name in alias_map.items():
+        if old_name in df_norm.columns and new_name not in df_norm.columns:
+            df_norm.rename(columns={old_name: new_name}, inplace=True)
+
+    # 3. Handle status vs is_paid_late / paid
+    if "status" not in df_norm.columns:
+        if "is_paid_late" in df_norm.columns:
+            def map_paid_late(val):
+                if pd.isna(val) or str(val).strip() == "" or str(val).strip().lower() in {"nan", "none", "null"}:
+                    return InvoiceStatus.OPEN.value
+                try:
+                    num = float(val)
+                    if num == 1.0:
+                        return InvoiceStatus.PAID_LATE.value
+                    elif num == 0.0:
+                        return InvoiceStatus.PAID_ON_TIME.value
+                except (ValueError, TypeError):
+                    pass
+                val_str = str(val).strip().lower()
+                if val_str in {"1", "1.0", "true", "yes", "late", "paid_late"}:
+                    return InvoiceStatus.PAID_LATE.value
+                elif val_str in {"0", "0.0", "false", "no", "on_time", "paid", "paid_on_time"}:
+                    return InvoiceStatus.PAID_ON_TIME.value
+                return InvoiceStatus.OPEN.value
+            df_norm["status"] = df_norm["is_paid_late"].apply(map_paid_late)
+        elif "paid" in df_norm.columns:
+            def map_paid(val):
+                if pd.isna(val) or str(val).strip() == "" or str(val).strip().lower() in {"nan", "none", "null"}:
+                    return InvoiceStatus.OPEN.value
+                try:
+                    num = float(val)
+                    if num == 0.0:
+                        return InvoiceStatus.OPEN.value
+                    elif num == 1.0:
+                        return InvoiceStatus.PAID_ON_TIME.value
+                except (ValueError, TypeError):
+                    pass
+                val_str = str(val).strip().lower()
+                if val_str in {"0", "0.0", "false", "no", "unpaid", "open"}:
+                    return InvoiceStatus.OPEN.value
+                return InvoiceStatus.PAID_ON_TIME.value
+            df_norm["status"] = df_norm["paid"].apply(map_paid)
+
+    # 4. Normalize status aliases if status column exists
+    if "status" in df_norm.columns:
+        def clean_status(val):
+            if pd.isna(val) or str(val).strip() == "":
+                return InvoiceStatus.OPEN.value
+            s = str(val).strip().lower().replace("-", "_").replace(" ", "_")
+            if s in {InvoiceStatus.PAID_ON_TIME.value, InvoiceStatus.PAID_LATE.value, InvoiceStatus.OPEN.value}:
+                return s
+            if s in {"paid", "settled", "completed", "closed", "on_time"}:
+                return InvoiceStatus.PAID_ON_TIME.value
+            if s in {"late", "overdue_paid", "delayed"}:
+                return InvoiceStatus.PAID_LATE.value
+            if s in {"pending", "unpaid", "outstanding", "active", "draft"}:
+                return InvoiceStatus.OPEN.value
+            return s
+        df_norm["status"] = df_norm["status"].apply(clean_status)
+
+    # 5. Impute optional secondary columns if missing
+    if "project_category" not in df_norm.columns and "client_name" in df_norm.columns:
+        df_norm["project_category"] = "General Services"
+
+    if "client_tier" not in df_norm.columns and "client_name" in df_norm.columns:
+        df_norm["client_tier"] = "Standard Client"
+
+    if "revision_count" not in df_norm.columns:
+        df_norm["revision_count"] = 0
+
+    if "past_late_count" not in df_norm.columns:
+        if "client_name" in df_norm.columns and "status" in df_norm.columns:
+            late_clients = df_norm[df_norm["status"] == InvoiceStatus.PAID_LATE.value]["client_name"].value_counts().to_dict()
+            df_norm["past_late_count"] = df_norm["client_name"].map(lambda c: late_clients.get(c, 0)).fillna(0).astype(int)
+        else:
+            df_norm["past_late_count"] = 0
+
+    if "actual_days_to_pay" not in df_norm.columns and "status" in df_norm.columns:
+        def impute_days(row):
+            st = str(row.get("status", "")).lower()
+            try:
+                t = int(row.get("payment_terms_days", 30))
+            except Exception:
+                t = 30
+            if st == InvoiceStatus.OPEN.value:
+                return np.nan
+            elif st == InvoiceStatus.PAID_LATE.value:
+                return t + 15
+            else:
+                return max(1, t - 2)
+        df_norm["actual_days_to_pay"] = df_norm.apply(impute_days, axis=1)
+
+    return df_norm
+
+
 def load_and_validate_csv(csv_source: Union[str, Path, io.StringIO, io.BytesIO]) -> pd.DataFrame:
     """Load a CSV file or buffer and validate against schema.
     
@@ -362,7 +487,8 @@ def load_and_validate_csv(csv_source: Union[str, Path, io.StringIO, io.BytesIO])
             ],
         )
 
-    df_clean, errors = validate_invoice_dataframe(df)
+    df_normalized = normalize_and_impute_csv_dataframe(df)
+    df_clean, errors = validate_invoice_dataframe(df_normalized)
     if errors:
         raise InvoiceValidationError(
             f"Invoice ledger validation failed with {len(errors)} error(s).",

@@ -3,6 +3,7 @@ import {
   InvoicePrediction,
   FollowupTone,
   FollowupDraftResponse,
+  NudgeRecord,
 } from "@/types";
 import { draftFollowup, formatCurrency, formatPercent, ApiClientError } from "@/lib/api";
 import {
@@ -26,6 +27,7 @@ import {
   MailIcon,
   GmailIcon,
   ExternalLinkIcon,
+  ClockIcon,
 } from "./icons";
 
 interface FollowupComposerDrawerProps {
@@ -33,6 +35,9 @@ interface FollowupComposerDrawerProps {
   onClose: () => void;
   onOpenEmailApp?: (mailtoUrl: string) => void;
   onOpenGmail?: (gmailUrl: string) => void;
+  onRecordAction?: (action: Omit<NudgeRecord, "id" | "timestamp">) => void;
+  defaultBusinessName?: string;
+  pastNudges?: NudgeRecord[];
 }
 
 export function FollowupComposerDrawer({
@@ -40,6 +45,9 @@ export function FollowupComposerDrawer({
   onClose,
   onOpenEmailApp,
   onOpenGmail,
+  onRecordAction,
+  defaultBusinessName,
+  pastNudges,
 }: FollowupComposerDrawerProps) {
   const [tone, setTone] = useState<FollowupTone>("gentle");
   const [userContext, setUserContext] = useState("");
@@ -113,6 +121,7 @@ export function FollowupComposerDrawer({
         risk_tier: invoice.risk_tier,
         late_probability: invoice.late_probability,
         tone: tone,
+        business_name: defaultBusinessName || undefined,
         user_context: userContext.trim() || undefined,
       });
 
@@ -174,6 +183,16 @@ export function FollowupComposerDrawer({
     const gmailUrl = buildGmailComposeUrl(recipientEmail, emailSubject, editableMessage);
 
     // 5. Open Gmail in a new browser tab
+    onRecordAction?.({
+      invoiceId: invoice.invoice_id,
+      clientName: invoice.client_name,
+      actionType: "gmail",
+      tone,
+      subject: emailSubject,
+      messageSnippet: editableMessage.slice(0, 80),
+      recipientEmail: recipientEmail || undefined,
+    });
+
     if (onOpenGmail) {
       onOpenGmail(gmailUrl);
       setHandoffNotice(
@@ -234,6 +253,16 @@ export function FollowupComposerDrawer({
     const mailtoUrl = buildMailtoUrl(recipientEmail, emailSubject, editableMessage);
 
     // 5. Trigger email client handoff
+    onRecordAction?.({
+      invoiceId: invoice.invoice_id,
+      clientName: invoice.client_name,
+      actionType: "mailto",
+      tone,
+      subject: emailSubject,
+      messageSnippet: editableMessage.slice(0, 80),
+      recipientEmail: recipientEmail || undefined,
+    });
+
     if (onOpenEmailApp) {
       onOpenEmailApp(mailtoUrl);
       setHandoffNotice(
@@ -260,6 +289,15 @@ export function FollowupComposerDrawer({
       await navigator.clipboard.writeText(editableMessage);
       setCopiedMessage(true);
       setTimeout(() => setCopiedMessage(false), 2500);
+      onRecordAction?.({
+        invoiceId: invoice.invoice_id,
+        clientName: invoice.client_name,
+        actionType: "copy_message",
+        tone,
+        subject: emailSubject,
+        messageSnippet: editableMessage.slice(0, 80),
+        recipientEmail: recipientEmail || undefined,
+      });
     } catch {
       setErrorMessage("Could not access clipboard. Please copy manually.");
     }
@@ -272,6 +310,15 @@ export function FollowupComposerDrawer({
       await navigator.clipboard.writeText(fullDraft);
       setCopiedFullDraft(true);
       setTimeout(() => setCopiedFullDraft(false), 2500);
+      onRecordAction?.({
+        invoiceId: invoice.invoice_id,
+        clientName: invoice.client_name,
+        actionType: "copy_full_draft",
+        tone,
+        subject: emailSubject,
+        messageSnippet: editableMessage.slice(0, 80),
+        recipientEmail: recipientEmail || undefined,
+      });
     } catch {
       setErrorMessage("Could not access clipboard. Please copy manually.");
     }
@@ -634,6 +681,43 @@ export function FollowupComposerDrawer({
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Past Recorded Follow-ups for this invoice */}
+            {pastNudges && pastNudges.length > 0 && (
+              <div className="pt-4 border-t border-[#EAEAEA] space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#111111]">
+                  <ClockIcon size={13} className="text-[#787774]" />
+                  <span>Previous Nudges for this Invoice ({pastNudges.length})</span>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {pastNudges.map((nudge) => (
+                    <div
+                      key={nudge.id}
+                      className="p-2.5 rounded-md border border-[#EAEAEA] bg-[#FBFBFA] text-xs flex items-start justify-between gap-2"
+                    >
+                      <div className="space-y-0.5 overflow-hidden">
+                        <div className="flex items-center gap-1.5 font-medium text-[#111111]">
+                          <span className="capitalize">{nudge.actionType.replace("_", " ")}</span>
+                          <span className="text-[#787774] font-normal">&bull;</span>
+                          <span className="text-[#787774] capitalize font-normal">{nudge.tone} tone</span>
+                        </div>
+                        <div className="text-[11px] text-[#555555] truncate">
+                          {nudge.subject || nudge.messageSnippet}
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-[#787774] font-mono shrink-0 whitespace-nowrap">
+                        {new Date(nudge.timestamp).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

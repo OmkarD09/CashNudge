@@ -34,9 +34,21 @@ export interface LedgerCashFlowSummary {
   low_risk_amount: number;
 }
 
+export interface HistoricalInvoiceRecord {
+  invoice_id: string;
+  client_name: string;
+  invoice_amount: number;
+  payment_terms_days: number;
+  status: "paid_on_time" | "paid_late" | "open";
+  actual_days_to_pay?: number | null;
+  project_category?: string | null;
+  client_tier?: string | null;
+}
+
 export interface LedgerAnalysisResult {
   summary: LedgerCashFlowSummary;
   predictions: InvoicePrediction[];
+  historical_invoices?: HistoricalInvoiceRecord[];
   metadata: {
     model_provider?: string;
     is_synthetic_data?: boolean;
@@ -113,4 +125,40 @@ export interface HealthResponse {
   status: string;
   service: string;
   version: string;
+}
+
+export type NudgeActionType = "gmail" | "mailto" | "copy_message" | "copy_full_draft";
+
+export interface NudgeRecord {
+  id: string;
+  invoiceId: string;
+  clientName: string;
+  actionType: NudgeActionType;
+  tone: FollowupTone;
+  subject: string;
+  timestamp: string;
+  messageSnippet: string;
+  recipientEmail?: string;
+}
+
+export interface SavedLedgerData {
+  result: LedgerAnalysisResult;
+  fileName: string;
+  savedAt: string;
+  totalInvoices: number;
+}
+
+export interface UserProfile {
+  businessName?: string;
+  defaultTone?: FollowupTone;
+}
+
+export interface StorageSummary {
+  hasSavedLedger: boolean;
+  savedLedgerName?: string;
+  savedLedgerDate?: string;
+  invoiceCount: number;
+  nudgeCount: number;
+  approximateBytes: number;
+  businessName?: string;
 }

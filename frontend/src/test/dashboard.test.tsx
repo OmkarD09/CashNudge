@@ -7,6 +7,7 @@ import { ProviderBadge } from "@/components/ProviderBadge";
 import { InvoiceTable } from "@/components/InvoiceTable";
 import { FollowupComposerDrawer } from "@/components/FollowupComposerDrawer";
 import { CsvUploadZone } from "@/components/CsvUploadZone";
+import { Navbar } from "@/components/Navbar";
 import { LedgerCashFlowSummary, InvoicePrediction, LedgerAnalysisResult } from "@/types";
 import * as api from "@/lib/api";
 
@@ -138,6 +139,123 @@ describe("InvoiceTable", () => {
 
     expect(screen.getByText("Apex Retailers")).toBeInTheDocument();
     expect(screen.queryByText("BrightPath Studio")).toBeNull();
+  });
+
+  it("renders 'Nudged' badge when invoice has recorded follow-up history", () => {
+    const mockNudgeHistory = {
+      "INV-2025-019": [
+        {
+          id: "nudge-1",
+          invoiceId: "INV-2025-019",
+          clientName: "Apex Retailers",
+          actionType: "gmail" as const,
+          tone: "firm" as const,
+          subject: "Payment Reminder",
+          timestamp: new Date().toISOString(),
+          messageSnippet: "Please review",
+        },
+      ],
+    };
+
+    render(
+      <InvoiceTable
+        predictions={mockPredictions}
+        onDraftFollowup={vi.fn()}
+        nudgeHistoryMap={mockNudgeHistory}
+      />
+    );
+
+    expect(screen.getByText(/Nudged/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Nudge Again/i })).toBeInTheDocument();
+  });
+
+  it("renders historical invoices tab and switches to settled records", () => {
+    const mockHistorical = [
+      {
+        invoice_id: "HIST-001",
+        client_name: "Legacy Client",
+        invoice_amount: 1500,
+        payment_terms_days: 30,
+        status: "paid_on_time" as const,
+        actual_days_to_pay: 25,
+        project_category: "Web Dev",
+        client_tier: "Enterprise",
+      },
+    ];
+
+    render(
+      <InvoiceTable
+        predictions={mockPredictions}
+        historicalInvoices={mockHistorical}
+        onDraftFollowup={vi.fn()}
+      />
+    );
+
+    // Both tabs should be present
+    expect(screen.getByRole("button", { name: /Open Invoices/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Settled Ledger History/i })).toBeInTheDocument();
+
+    // Switch to Settled Ledger History
+    fireEvent.click(screen.getByRole("button", { name: /Settled Ledger History/i }));
+
+    // Historical invoice should now be visible
+    expect(screen.getByText("HIST-001")).toBeInTheDocument();
+    expect(screen.getByText("Legacy Client")).toBeInTheDocument();
+    expect(screen.getByText("Paid On Time")).toBeInTheDocument();
+    expect(screen.getByText(/25 days/i)).toBeInTheDocument();
+  });
+
+  it("renders callout and defaults to settled tab when predictions array is empty", () => {
+    const mockHistorical = [
+      {
+        invoice_id: "HIST-002",
+        client_name: "Settled Enterprise",
+        invoice_amount: 4000,
+        payment_terms_days: 30,
+        status: "paid_late" as const,
+        actual_days_to_pay: 45,
+      },
+    ];
+
+    render(
+      <InvoiceTable
+        predictions={[]}
+        historicalInvoices={mockHistorical}
+        onDraftFollowup={vi.fn()}
+      />
+    );
+
+    // Automatically switches to settled tab
+    expect(screen.getByText(/All 1 invoices in this file are marked as settled\/paid/i)).toBeInTheDocument();
+    expect(screen.getByText("HIST-002")).toBeInTheDocument();
+    expect(screen.getByText("Settled Enterprise")).toBeInTheDocument();
+    expect(screen.getByText("Paid Late")).toBeInTheDocument();
+  });
+});
+
+describe("Navbar", () => {
+  it("renders local storage status indicator and triggers onOpenStorageModal", () => {
+    const mockOpenStorage = vi.fn();
+
+    render(
+      <Navbar
+        isApiHealthy={true}
+        isCheckingHealth={false}
+        onRefreshHealth={vi.fn()}
+        onOpenUpload={vi.fn()}
+        onResetBenchmark={vi.fn()}
+        isCustomLedger={false}
+        onOpenStorageModal={mockOpenStorage}
+        hasSavedLedger={true}
+      />
+    );
+
+    const storageBtn = screen.getByRole("button", { name: /Browser Storage and Privacy Settings/i });
+    expect(storageBtn).toBeInTheDocument();
+    expect(screen.getByText(/Storage: Saved/i)).toBeInTheDocument();
+
+    fireEvent.click(storageBtn);
+    expect(mockOpenStorage).toHaveBeenCalled();
   });
 });
 
@@ -716,5 +834,29 @@ describe("CsvUploadZone", () => {
     expect(screen.getByText("Row 3:")).toBeInTheDocument();
     expect(screen.getByText("invoice_amount")).toBeInTheDocument();
     expect(screen.getByText(/Must be a positive non-zero number/)).toBeInTheDocument();
+  });
+
+  it("allows downloading sample CSV template", () => {
+    // Mock URL.createObjectURL and revokeObjectURL
+    const mockCreateObjectURL = vi.fn().mockReturnValue("blob:mock-url");
+    const mockRevokeObjectURL = vi.fn();
+    window.URL.createObjectURL = mockCreateObjectURL;
+    window.URL.revokeObjectURL = mockRevokeObjectURL;
+
+    render(
+      <CsvUploadZone
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    );
+
+    const downloadBtn = screen.getByRole("button", { name: /Download Template/i });
+    expect(downloadBtn).toBeInTheDocument();
+
+    fireEvent.click(downloadBtn);
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
   });
 });
